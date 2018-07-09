@@ -1,9 +1,8 @@
 import wx
 import wx.xrc as xrc
+from . import uimgr
 
 class Holder: pass
-
-uimgr = None
 
 def get():
     return uimgr
