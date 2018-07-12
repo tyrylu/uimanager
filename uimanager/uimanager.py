@@ -1,3 +1,5 @@
+import re
+import logging
 import wx
 import wx.xrc as xrc
 from . import uimgr
@@ -7,6 +9,7 @@ class Holder: pass
 def get():
     return uimgr
 
+log = logging.getLogger(__name__)
 class UIManager(object):
     def __init__(self, resource_file, top_level_name, top_level_type="frame", reuse_app=False, load_on=None):
         global uimgr
@@ -15,6 +18,7 @@ class UIManager(object):
         self._menu_items_by_name = {}
         self._menus = {}
         self.resource_name = resource_file
+        self.resource_names = get_xrc_names(self.resource_name)
         if not reuse_app:
             self.app = wx.App(redirect=False)
         else:
@@ -47,9 +51,12 @@ class UIManager(object):
         handlers = [name for name in dir(eventsobj) if name.startswith("on_")]
         olen = len(only)
         for h in handlers:
-            try:
-                _on, name, event = h.split("_", 2)
-            except ValueError: raise ValueError("Supposed handler %s has wrong name."%h)
+            name = find_xrc_name(h, self.resource_names)
+            if not name:
+                log.warning(f"The handler {h} did not correspond to any of the names in the xrc file.")
+                continue
+            name_and_event = h[3:]
+            event = name_and_event.replace(name + "_", "")
             if olen != 0 and name not in only: continue
             event = self._lookup_event(event)
             parent.Bind(event, getattr(eventsobj, h), id=xrc.XRCID(name))
@@ -235,3 +242,25 @@ def menu_command(menu, label, shortcut, name=None):
         func.item_name = name
         return func
     return wrap
+
+def get_xrc_names(fname):
+    names = set()
+    with open(fname, "r", encoding="utf-8") as fp:
+        for line in fp:
+            match = re.search(r'name=\"(.*)\"', line)
+            if match:
+                names.add(match.group(1))
+    return names
+
+def find_xrc_name(meth_name, names):
+    candidates = []
+    for name in names:
+        if name in meth_name:
+            candidates.append(name)
+    if not candidates:
+        return None
+    result = candidates[0]
+    for candidate in candidates[1:]:
+        if len(candidate) > len(result):
+            result = candidate
+    return result
