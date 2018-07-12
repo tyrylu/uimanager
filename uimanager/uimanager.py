@@ -12,6 +12,7 @@ class UIManager(object):
         global uimgr
         self._event_aliases = {}
         self._menu_items = {}
+        self._menu_items_by_name = {}
         self._menus = {}
         self.resource_name = resource_file
         if not reuse_app:
@@ -40,6 +41,7 @@ class UIManager(object):
             return load_on
         else:
             return self.resource.LoadDialog(self.usable_parent, name)
+    
     def auto_bind(self, parent, eventsobj, only=[], alternate_bind_of=[]):
         if eventsobj is None: return
         handlers = [name for name in dir(eventsobj) if name.startswith("on_")]
@@ -122,6 +124,7 @@ class UIManager(object):
         self.auto_bind(inst, inst, alternate_bind_of=alternate_bind_of)
         if hasattr(inst, "post_init"): inst.post_init(**post_init_kwargs)
         return inst
+
     def prepare_xrc_frame(self, cls, alternate_bind_of=[], parent=None, **post_init_kwargs):
         if not parent: parent = self.top_level
         inst = cls()
@@ -134,7 +137,6 @@ class UIManager(object):
         self.auto_bind(inst, inst, alternate_bind_of=alternate_bind_of)
         if hasattr(inst, "post_init"): inst.post_init(**post_init_kwargs)
         return inst
-        
         
     def _unwind_stack(self, evt):
         try: self._dlg_stack.remove(self.current_dialog)
@@ -150,7 +152,7 @@ class UIManager(object):
 
     def _lookup_event(self, evt):
         if not hasattr(wx, "EVT_%s"%evt.upper()):
-                evt = self._event_aliases[evt]
+            evt = self._event_aliases[evt]
         return getattr(wx, "EVT_%s"%evt.upper())
 
     @property
@@ -158,6 +160,7 @@ class UIManager(object):
         obj = getattr(self, "top_level", None)
         if not issubclass(obj.__class__, wx.Window): return None
         return obj
+
     def _menu_item_callables(self, source):
         for member_name in source.__class__.__dict__.keys():
             member_obj = getattr(source, member_name)
@@ -175,6 +178,9 @@ class UIManager(object):
             item = menu.Append(item_id, label)
             self.top_level.Bind(wx.EVT_MENU, cmd, id=item_id)
             self._menu_items[(cmd.menu, cmd.item_label)] = item
+            if cmd.item_name:
+                self._menu_items_by_name[cmd.item_name] = item
+    
     def _ensure_menu(self, path, parent=None):
         if not path:
             return parent
@@ -201,6 +207,7 @@ class UIManager(object):
                 parent.Append(menu_id, component, menu)
                 self._menus[menu] = menu_id
                 return self._ensure_menu(path, menu)
+
     def unregister_menu_commands(self, source):
         for cmd in self._menu_item_callables(source):
             item = self._menu_items[(cmd.menu, cmd.item_label)]
@@ -216,10 +223,15 @@ class UIManager(object):
             if menu.MenuItemCount == 0: # We can remove it from the main menubar
                 self.top_level.MenuBar.Remove(self.top_level.MenuBar.FindMenu(menu.Label))
 
-def menu_command(menu, label, shortcut):
+    def menu_item_with_name(self, name):
+        return self._menu_items_by_name[name]
+
+
+def menu_command(menu, label, shortcut, name=None):
     def wrap(func):
         func.menu = menu
         func.item_label = label
         func.item_shortcut = shortcut
+        func.item_name = name
         return func
     return wrap
