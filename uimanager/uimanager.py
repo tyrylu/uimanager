@@ -254,8 +254,9 @@ def get_xrc_names(fname):
 
 def find_xrc_name(meth_name, names):
     candidates = []
+    meth_name_without_prefix = meth_name[3:]
     for name in names:
-        if name in meth_name:
+        if meth_name_without_prefix.startswith(name):
             candidates.append(name)
     if not candidates:
         return None
